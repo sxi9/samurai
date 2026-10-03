@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>SamurAI Content Pack</title>
+<style>
+@page { size: A4; margin: 20mm 18mm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1a1a2e; line-height: 1.55; font-size: 11pt; max-width: 760px; margin: 0 auto; }
+h1 { font-size: 22pt; color: #c81e3a; border-bottom: 3px solid #c81e3a; padding-bottom: 6px;
+  margin-top: 26px; page-break-after: avoid; }
+h2 { font-size: 15pt; color: #1a1a2e; border-bottom: 1px solid #ddd; padding-bottom: 4px;
+  margin-top: 24px; page-break-after: avoid; }
+h3 { font-size: 12.5pt; color: #e06c00; margin-top: 18px; page-break-after: avoid; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 4px; padding-left: 22px; }
+li { margin: 4px 0; }
+code { background: #f3f3f7; color: #c81e3a; padding: 1px 5px; border-radius: 4px;
+  font-family: 'Consolas','Courier New',monospace; font-size: 9.5pt; }
+pre { background: #0f1020; color: #e8e8f0; padding: 12px 14px; border-radius: 8px;
+  overflow-x: auto; page-break-inside: avoid; }
+pre code { background: transparent; color: #7dd3fc; padding: 0; font-size: 9.5pt; }
+hr { border: none; border-top: 2px dashed #ccc; margin: 26px 0; }
+strong { color: #0a0a1a; }
+h1:first-of-type { margin-top: 0; }
+</style></head>
+<body>
+<h1>SamurAI — Content Pack (LinkedIn / Blog / X)</h1>
+<p>Everything below is drawn from the actual build. Framing leads with the engineering</p>
+<p>and responsible-use story (not &quot;uncensored/jailbroken&quot;), which is what reads as</p>
+<p>credible to security engineers and hiring managers.</p>
+<hr>
+<h2>1. LinkedIn Post (copy-paste ready)</h2>
+<p>Just built SamurAI: a self-hosted, AI-assisted web application security scanner for authorized penetration testing and bug-bounty work. Start to working tool in about a day.</p>
+<p>The goal was to run powerful open-weight LLMs on my own GPU instead of fighting rate limits and generic-assistant refusals on legitimate offensive-security questions I&#x27;m authorized to ask. So I provisioned an NVIDIA H200 (141GB VRAM) on NVIDIA Brev and went to work.</p>
+<p>The journey was the real lesson. My first serving stack, vLLM, crashed hard on the instance&#x27;s bleeding-edge CUDA 13.0 / Driver 580: FlashAttention 3 was incompatible with the compiled kernels, and both FlashInfer and enforce-eager died during CUDA graph capture. I pivoted to Ollama, whose packaged runtime handled the driver stack cleanly. Takeaway number one: on a bleeding-edge CUDA stack, a packaged runtime can beat a from-source server.</p>
+<p>The architecture is dual-model. WhiteRabbitNeo 33B (a cybersecurity-specialized model) handles vulnerability analysis and the interactive security chat; Qwen2.5-72B writes clean, professional reports. Both are Q4_K_M GGUF quants, ~66GB combined, running side by side on one GPU. A specialist plus a generalist beats one model doing everything.</p>
+<p>Lesson two, learned the hard way: model refusal behavior lives in the weights, not just the system prompt. And lesson three: framework churn is half the battle. I debugged Gradio 6 breaking changes live before the four-tab UI finally returned HTTP 200 on 7860.</p>
+<p>Next up: integrating the nuclei engine with a local-LLM triage layer, CVSS/CWE mapping, and a mandatory scope-and-authorization gate before any scan runs. For a security tool, that gate isn&#x27;t polish, it&#x27;s the difference between a credible engineer and a liability.</p>
+<p>For authorized security testing only.</p>
+<p>#CyberSecurity #AppSec #LLM #BugBounty #GPU #AIEngineering</p>
+<hr>
+<h2>2. Technical Blog Post</h2>
+<h1>Building SamurAI: Self-Hosting Security LLMs on an H200 for Authorized Pentesting</h1>
+<p>I spend my days in the security industry, and one recurring friction point has always bugged me: general-purpose hosted AI assistants tend to refuse to discuss exploitation techniques — even when you&#x27;re the one holding the signed scope document. For authorized penetration testing and bug-bounty work, that refusal isn&#x27;t a safety feature, it&#x27;s a workflow blocker. So over roughly one day I built <strong>SamurAI</strong>, a self-hosted, AI-assisted web application security scanner for <em>authorized</em> testing. This is the engineering write-up: the infrastructure, the architecture decisions, the failures, and the lessons.</p>
+<h2>Why Self-Host the Models</h2>
+<p>The core motivation was control. I wanted to run powerful open-weight LLMs on my own GPU instead of paying per token and being rate-limited and filtered by commercial APIs. For legitimate offensive-security work, that matters twice over: once for cost and latency, and once because security-domain open-weight models will actually engage with the material a hosted assistant won&#x27;t. Self-hosting also means my scan data — target details, findings, draft reports — never leaves infrastructure I control.</p>
+<p>The important nuance, and the thing I kept coming back to: capability is only half the story. A tool that will discuss exploitation has to be paired with authorization controls, or it&#x27;s a liability instead of an asset. More on that at the end.</p>
+<h2>The Infrastructure Journey: Brev, an H200, and a vLLM Faceplant</h2>
+<p>I provisioned an <strong>NVIDIA H200</strong> instance on NVIDIA Brev — 141GB of VRAM, which is the detail that makes the whole dual-model design possible later.</p>
+<p>My first instinct for model serving was <strong>vLLM</strong>. It&#x27;s fast, it&#x27;s the default recommendation, and it should have been boring. It was not. The instance shipped a bleeding-edge stack — <strong>CUDA 13.0, Driver 580</strong> — and vLLM&#x27;s compiled kernels did not survive contact with it. FlashAttention 3 was incompatible with the compiled kernels, and when I fell back to the FlashInfer backend, it crashed during CUDA graph capture. Disabling graph capture with enforce-eager mode crashed too. I was chasing a compatibility problem three layers down from my actual project.</p>
+<p>So I pivoted to <strong>Ollama</strong>, and it handled the driver and runtime compatibility cleanly on the first try. The lesson wrote itself: on a bleeding-edge CUDA stack, a packaged runtime beat a from-source server. vLLM will almost certainly catch up, but on day zero of a new driver, Ollama&#x27;s packaged runtime was simply more robust.</p>
+<p>A couple of smaller battles along the way, for anyone who&#x27;ll hit them too:</p>
+<ul>
+<li>Ubuntu&#x27;s &quot;externally-managed environment&quot; blocked <code>pip</code> the way it does on every modern distro now. Fixed with <code>python3-venv</code> and a dedicated virtualenv — the correct answer, not <code>--break-system-packages</code>.</li>
+<li>I worked over SSH tunnels, and the instance&#x27;s SSH daemon rate-limited and briefly IP-banned rapid reconnects, fail2ban-style. Annoying during iterative debugging, and a decent argument for standing up a public share URL for demos instead of hammering SSH.</li>
+</ul>
+<h2>Dual-Model Architecture — and Why Quantization Makes It Fit</h2>
+<p>The design decision I&#x27;m happiest with is running <strong>two models side by side</strong>, a specialist and a generalist, each doing what it&#x27;s best at:</p>
+<ul>
+<li><strong>WhiteRabbitNeo 33B</strong> — a cybersecurity-specialized open-weight model. This drives vulnerability analysis, exploit-path suggestions, and the interactive security chat. Pulled as a GGUF <code>Q4_K_M</code> quant via Ollama, about 19GB on disk.</li>
+<li><strong>Qwen2.5-72B-Instruct</strong> (a community build) — a large generalist I use for writing clear, professional bug-bounty and pentest reports. Also GGUF <code>Q4_K_M</code>, about 47GB.</li>
+</ul>
+<p>Here&#x27;s where the H200&#x27;s 141GB earns its keep. <code>Q4_K_M</code> quantization is the enabling trick: four-bit quantization shrinks roughly 100B parameters&#x27; worth of models down to about 66GB combined, so a specialist and a generalist coexist comfortably on one GPU with headroom to spare. Without quantization, neither of these would fit alongside the other.</p>
+<p>One finding worth stating plainly, because it surprised people when I described it: I tested whether a stock instruct model plus a &quot;system-prompt override&quot; could stand in for a security-tuned model. It can&#x27;t. The refusal behavior is baked into the weights, not layered on at the prompt. No amount of system-prompt coaxing changes that — which is exactly why the project uses purpose-built security weights rather than trying to coax a general model. And again: those weights are paired with authorization controls, not turned loose.</p>
+<p>I also stood up <strong>Open WebUI</strong> on the box — a ChatGPT-style front end — for ad-hoc model use outside the scanner.</p>
+<h2>A Tour of the Tool</h2>
+<p>SamurAI is Python and deliberately modular:</p>
+<ul>
+<li><strong><code>tools/recon.py</code></strong> — HTTP security-header analysis, technology-stack fingerprinting, DNS enumeration with subdomain brute-forcing, an endpoint crawler that extracts forms, parameters, JS files, and API endpoints, and sensitive-path discovery across ~45 common paths (think <code>.env</code>, <code>.git</code>, backup files, admin panels).</li>
+<li><strong><code>tools/vuln_scanner.py</code></strong> — checks for reflected XSS (GET and POST), SQL injection (error-based and boolean-blind), SSTI, LFI, open redirect, and CORS misconfiguration.</li>
+<li><strong><code>agents/pentest_ai.py</code></strong> — the orchestration layer. It pipes scan results to WhiteRabbitNeo for analysis and exploit suggestions, and to Qwen-72B for report writing. It also powers the interactive chat and a payload generator covering 14 vulnerability types.</li>
+<li><strong><code>app.py</code></strong> — a Gradio web UI with four tabs: Scanner, Bug-Bounty Reporter, AI Chat, and Payload Generator, served on port 7860.</li>
+</ul>
+<p>It ships with a Dockerfile, a one-command <code>deploy.sh</code>, a README, and <code>requirements.txt</code> so the whole thing is reproducible.</p>
+<h2>Debugging War Story: Gradio 6 Broke Everything at Once</h2>
+<p>Deployment was the usual <code>scp</code> the project to the H200, build a venv, install dependencies. Then I ran straight into <strong>Gradio 6 breaking changes</strong>, and had to debug them live against a running box:</p>
+<ul>
+<li><code>Textbox</code> dropped <code>show_copy_button</code>.</li>
+<li><code>theme</code> and <code>css</code> moved off the <code>Blocks</code> constructor and onto <code>launch()</code>.</li>
+<li><code>ChatInterface</code> no longer accepts a <code>type</code> argument.</li>
+<li>Chat history now arrives as a list of message dicts instead of tuples — so the handler had to be rewritten to read the new shape.</li>
+</ul>
+<p>None of these are hard individually. Together, on a framework version bump, they&#x27;re death by a thousand cuts — the app refuses to even construct until you&#x27;ve found all four. The end state was worth it: app live on the H200, both models loaded, Gradio returning HTTP 200 on 7860.</p>
+<h2>Lessons Worth Sharing</h2>
+<ol>
+<li><strong>On bleeding-edge CUDA, a packaged runtime (Ollama) beat a from-source server (vLLM).</strong> Pick your battles with the GPU stack.</li>
+<li><strong><code>Q4_K_M</code> GGUF quantization is what lets ~100B params of models share one GPU.</strong> It&#x27;s the difference between &quot;pick one model&quot; and &quot;run both.&quot;</li>
+<li><strong>Specialist + generalist beats one model doing everything.</strong> A security-tuned model for analysis, a strong generalist for prose.</li>
+<li><strong>Model refusal lives in the weights, not just the prompt.</strong> Choose the right weights instead of fighting the wrong ones.</li>
+<li><strong>Framework churn is half the battle.</strong> Budget real time for breaking changes — they don&#x27;t announce themselves until build time.</li>
+<li><strong>For a security tool, authorization controls and responsible-use framing aren&#x27;t optional polish.</strong> They&#x27;re what separates a credible engineer from a liability.</li>
+</ol>
+<h2>What&#x27;s Next</h2>
+<p>From a six-lens review of the project, the roadmap I&#x27;m most excited about:</p>
+<ul>
+<li>Integrate the <strong>nuclei</strong> engine (9,000+ community templates) with a local-LLM triage layer that dedupes and ranks findings.</li>
+<li><strong>CVSS v3.1 scoring</strong> plus CWE and OWASP mapping on every finding.</li>
+<li>A <strong>severity dashboard</strong> with KPI tiles and charts.</li>
+<li><strong>Live-streaming the model&#x27;s reasoning</strong> into the UI so you can watch it work.</li>
+<li>A <strong>mandatory scope and authorization gate</strong> — an allowlist plus an attestation step — before any scan runs. Of everything on this list, this is the clearest professional-maturity signal, and it&#x27;s the next thing I&#x27;m building.</li>
+</ul>
+<h2>Responsible Use</h2>
+<p>SamurAI is built for <strong>authorized security testing only</strong> — penetration tests you&#x27;ve been contracted for and bug-bounty programs whose scope you&#x27;re operating inside. Running any scanner against systems you don&#x27;t own or lack explicit written permission to test is illegal and unethical, full stop. The capability to engage with exploitation techniques exists here to serve testers who already hold authorization, and the roadmap&#x27;s scope-and-attestation gate is there precisely to keep that line bright. Use it the way a professional would, or don&#x27;t use it at all.</p>
+<hr>
+<h2>3. X / Twitter Thread</h2>
+<p>1/ I spent ~a day building SamurAI: a self-hosted, AI-assisted web app security scanner for <em>authorized</em> pentesting &amp; bug bounty. Two open-weight LLMs on one GPU. Here&#x27;s the engineering story — including the parts that broke. 🧵</p>
+<p>2/ Why self-host? For authorized offensive-security work, general-purpose assistants refuse to engage with techniques you&#x27;re contracted to use. So I ran security-specialized open-weight models on my own GPU instead of fighting API filters + rate limits.</p>
+<p>3/ Hardware: an NVIDIA H200 (141GB VRAM) on NVIDIA Brev. My first serving stack was vLLM — and it faceplanted on the box&#x27;s bleeding-edge CUDA 13.0 / Driver 580. FlashAttention 3 clashed with the compiled kernels; FlashInfer + enforce-eager both died in CUDA graph capture.</p>
+<p>4/ Pivoted to Ollama. Clean on the first try. Lesson 1: on a day-zero CUDA stack, a packaged runtime can beat a from-source server. Sometimes the fast path is the robust one.</p>
+<p>5/ Architecture is dual-model: a specialist + a generalist. WhiteRabbitNeo 33B drives vuln analysis + security chat; Qwen2.5-72B writes the professional reports. Both Q4_K_M GGUF, ~66GB combined.</p>
+<p>6/ Q4_K_M quantization is the whole trick — 4-bit shrinks ~100B params of models enough that both fit on one GPU with headroom. Lesson 2: model refusal lives in the <em>weights</em>, not the prompt. Pick the right weights instead of fighting the wrong ones.</p>
+<p>7/ The tool (Python): recon (headers, tech fingerprint, DNS/subdomains, crawler, path discovery), a vuln scanner (XSS/SQLi/SSTI/LFI/redirect/CORS), an AI orchestration layer, and a 4-tab Gradio UI. Shipping it meant debugging a wall of Gradio 6 breaking changes live.</p>
+<p>8/ Next: nuclei engine (9k+ templates) + a local-LLM triage layer, CVSS/CWE scoring, a severity dashboard, and a mandatory scope + authorization gate before any scan runs.</p>
+<p>For authorized security testing only — test only what you own or have written permission to assess.</p>
+<p>#CyberSecurity #AppSec #LLM #BugBounty</p>
+</body></html>

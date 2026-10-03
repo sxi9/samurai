@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>SamurAI Content Pack</title>
+<style>
+@page { size: A4; margin: 20mm 18mm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1a1a2e; line-height: 1.55; font-size: 11pt; max-width: 760px; margin: 0 auto; }
+h1 { font-size: 22pt; color: #c81e3a; border-bottom: 3px solid #c81e3a; padding-bottom: 6px;
+  margin-top: 26px; page-break-after: avoid; }
+h2 { font-size: 15pt; color: #1a1a2e; border-bottom: 1px solid #ddd; padding-bottom: 4px;
+  margin-top: 24px; page-break-after: avoid; }
+h3 { font-size: 12.5pt; color: #e06c00; margin-top: 18px; page-break-after: avoid; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0 8px 4px; padding-left: 22px; }
+li { margin: 4px 0; }
+code { background: #f3f3f7; color: #c81e3a; padding: 1px 5px; border-radius: 4px;
+  font-family: 'Consolas','Courier New',monospace; font-size: 9.5pt; }
+pre { background: #0f1020; color: #e8e8f0; padding: 12px 14px; border-radius: 8px;
+  overflow-x: auto; page-break-inside: avoid; }
+pre code { background: transparent; color: #7dd3fc; padding: 0; font-size: 9.5pt; }
+hr { border: none; border-top: 2px dashed #ccc; margin: 26px 0; }
+strong { color: #0a0a1a; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10pt;
+  page-break-inside: avoid; }
+th, td { border: 1px solid #d0d0da; padding: 6px 10px; text-align: left; vertical-align: top; }
+thead th { background: #1a1a2e; color: #fff; }
+tbody tr:nth-child(even) { background: #f6f6fa; }
+h1:first-of-type { margin-top: 0; }
+</style></head>
+<body>
+<h1>Running an Uncensored Local LLM on an NVIDIA H200 — A Brief</h1>
+<h2>Overview</h2>
+<p>This is a short, practical account of standing up large, self-hosted <strong>open-weight LLMs</strong> on a single</p>
+<p><strong>NVIDIA H200</strong> GPU — models that, unlike filtered hosted assistants, will engage with the offensive-security</p>
+<p>material a tester needs for <strong>authorized</strong> penetration testing and bug-bounty work. Everything runs locally:</p>
+<p>no API keys, no per-token billing, and no scan data leaving infrastructure I control.</p>
+<h2>Why Local, and Why Uncensored</h2>
+<ul>
+<li><strong>Control &amp; privacy.</strong> Target details, findings, and draft reports never leave the box.</li>
+<li><strong>No refusals on authorized work.</strong> General-purpose hosted assistants routinely refuse legitimate</li>
+</ul>
+<p>exploitation questions even when you hold a signed scope document. Security-domain and refusal-removed</p>
+<p>(&quot;abliterated&quot;) open weights engage with the material instead.</p>
+<ul>
+<li><strong>Cost &amp; latency.</strong> A fixed GPU beats metered APIs for heavy, iterative use.</li>
+<li><strong>Key nuance:</strong> capability is only half the story — it must be paired with authorization controls, or the</li>
+</ul>
+<p>tool is a liability rather than an asset.</p>
+<h2>The Hardware</h2>
+<ul>
+<li><strong>NVIDIA H200</strong>, provisioned on NVIDIA Brev — <strong>141 GB of VRAM</strong>. That capacity is what makes running two</li>
+</ul>
+<p>large models side by side possible.</p>
+<h2>The Serving Stack (and a Pivot)</h2>
+<ul>
+<li>First attempt: <strong>vLLM</strong>. It crashed on the instance&#x27;s bleeding-edge <strong>CUDA 13.0 / Driver 580</strong> stack —</li>
+</ul>
+<p>FlashAttention 3 was incompatible with the compiled kernels, and both the FlashInfer backend and</p>
+<p>enforce-eager mode died during CUDA graph capture.</p>
+<ul>
+<li>Pivot: <strong>Ollama</strong>, which handled the driver/runtime compatibility cleanly on the first try.</li>
+<li><strong>Takeaway:</strong> on a day-zero CUDA stack, a packaged runtime (Ollama) beat a from-source server (vLLM).</li>
+<li>Added <strong>Open WebUI</strong> (a ChatGPT-style front end) on top of Ollama for interactive use.</li>
+</ul>
+<h2>The Models (Dual, Quantized)</h2>
+<ul>
+<li><strong>WhiteRabbitNeo 33B</strong> — a cybersecurity-specialized open-weight model for vulnerability analysis and</li>
+</ul>
+<p>interactive security chat. GGUF <code>Q4_K_M</code>, ~19 GB.</p>
+<ul>
+<li><strong>Qwen2.5-72B-Instruct</strong> (community &quot;abliterated&quot; build) — a strong generalist for clear, professional</li>
+</ul>
+<p>report writing. GGUF <code>Q4_K_M</code>, ~47 GB.</p>
+<ul>
+<li><strong>Why it fits:</strong> <code>Q4_K_M</code> 4-bit quantization shrinks ~100B parameters&#x27; worth of models to **~66 GB</li>
+</ul>
+<p>combined**, so a specialist and a generalist coexist on one GPU with headroom to spare.</p>
+<ul>
+<li><strong>A finding worth stating plainly:</strong> a stock instruct model plus a &quot;system-prompt override&quot; still refuses</li>
+</ul>
+<p>security questions — that behavior lives in the <strong>weights</strong>, not the prompt. The honest fix is choosing the</p>
+<p>right weights, not fighting the wrong ones.</p>
+<h2>Quick Setup</h2>
+<pre><code># Install the runtime
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull the models (GGUF Q4_K_M)
+ollama pull &lt;whiterabbitneo-33b-gguf&gt;
+ollama pull &lt;qwen2.5-72b-abliterated-gguf&gt;
+
+# Optional: a ChatGPT-style UI on top
+#   Open WebUI on port 8080, talking to Ollama on 11434
+</code></pre>
+<h2>Key Numbers</h2>
+<table>
+<thead><tr><th>Item</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>GPU / VRAM</td><td>NVIDIA H200 · 141 GB</td></tr>
+<tr><td>Driver / CUDA</td><td>580 / 13.0</td></tr>
+<tr><td>Security model</td><td>WhiteRabbitNeo 33B · Q4_K_M · ~19 GB</td></tr>
+<tr><td>Report model</td><td>Qwen2.5-72B abliterated · Q4_K_M · ~47 GB</td></tr>
+<tr><td>Combined footprint</td><td>~66 GB (headroom on 141 GB)</td></tr>
+<tr><td>Ports</td><td>Ollama 11434 · Open WebUI 8080</td></tr>
+</tbody></table>
+<h2>Lessons</h2>
+<ol>
+<li>On bleeding-edge CUDA, a packaged runtime can beat a from-source server.</li>
+<li><code>Q4_K_M</code> GGUF quantization is what lets ~100B params share one GPU.</li>
+<li>Specialist + generalist beats one model doing everything.</li>
+<li>Model refusal lives in the weights, not just the prompt.</li>
+</ol>
+<h2>Responsible Use</h2>
+<p>These models are self-hosted for <strong>authorized security testing only</strong> — systems you own or have explicit</p>
+<p>written permission to assess. The capability exists to serve testers who already hold authorization; running</p>
+<p>it against anything else is illegal and unethical.</p>
+</body></html>
